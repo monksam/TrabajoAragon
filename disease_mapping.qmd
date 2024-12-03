@@ -1,0 +1,124 @@
+---
+# Title options
+title: "Tarea entregable"
+subtitle: "Disease mapping"
+author: "Santiago Ausina, Diego Fernández y Jorge Guitart"
+
+# Output options
+format: pdf
+editor: visual
+lang: es
+execute: 
+  warning: false
+
+# Style options
+fontsize: 10pt
+geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
+code-block-bg: white
+code-block-border-left: "82a3b0" # Must be a "hex" value
+---
+
+```{r libs.y.datos}
+#| include: false
+
+# Cargamos librerías y datos
+pacman::p_load(sf, spdep, sp, R2WinBUGS, ggplot2, patchwork)
+load("./material/Aragon.Rdata")
+aragon.sf <- st_read("./material/aragon.shp")
+
+# Transformamos los datos
+aragon.sf <- aragon.sf[order(aragon.sf$CODMUNI), ] # Ordenamos el dataframe
+aragon.sf <- cbind(aragon.sf, Aragon.df[, 2:3]); rm(Aragon.df) # Fusionamos datos
+aragon.spdf <- as(aragon.sf, "Spatial") # Convertimos a SPDF
+vecinos <- nb2WB(poly2nb(aragon.spdf)) # Calculamos vecinos (adaptado a WinBUGS)
+```
+
+```{r sim1}
+#| eval: false
+
+# Programamos el modelo
+mod1 <- function() {
+  for (i in 1:nObs) {
+    O[i] ~ dpois(mu[i])
+    log(mu[i]) <- log(E[i]) + m + het[i] + sp[i]
+    het[i] ~ dnorm(0, prechet)
+    R[i] <- exp(m + het[i] + sp[i])
+  }
+  
+  sp[1:nObs] ~ car.normal(adj[], w[], num[], precsp)
+  m ~ dflat()
+  prechet <- pow(sdhet, -2); precsp <- pow(sdsp, -2)
+  sdhet ~ dunif(0, 10); sdsp ~ dunif(0, 10)
+  
+  for (j in 1:nObs) {
+    p.R[j] <- step(R[j] - 1) # Calcula la probabilidad de que RME sea mayor que 1
+  }
+}
+
+# Ajustamos las distribuciones previas
+inits.mod1 <- function() {list(m = rnorm(1), 
+                               sdhet = runif(1), 
+                               sdsp = runif(1))}
+
+# Cargamos los datos
+datos.mod1 <- list(O = aragon.spdf$O, 
+                   E = aragon.spdf$E, 
+                   adj = vecinos$adj, 
+                   num = vecinos$num, 
+                   w = vecinos$weights, 
+                   nObs = length(aragon.spdf))
+
+# Pedimos los resultados
+params.mod1 <- c("R", "p.R")
+
+# Lanzamos el modelo
+res.mod1 <- bugs(data = datos.mod1, model = mod1,
+                 param = params.mod1, inits = inits.mod1)
+```
+
+```{r res1.save}
+#| echo: false
+#| eval: false
+
+# Guardamos el resultado para ahorrar tiempo compilando
+save(res.mod1, file = "./material/resmod1")
+```
+
+```{r res1.load}
+#| echo: false
+
+# Ejecutamos un chunk para cargar directamente el resultado
+load("./material/resmod1")
+```
+
+Recuperamos el objeto sf para graficarlo mejor.
+
+```{r datos.2}
+
+# Añadimos al data.frame las columnas RME y p.RME
+aragon.sf$RME <- res.mod1$mean$R
+aragon.sf$p.RME <- res.mod1$mean$p.R
+```
+
+```{r plot}
+#| fig.height: 5.5
+#| fig.width: 9
+#| fig.align: "center"
+
+rme.plot <- ggplot(aragon.sf) +
+  geom_sf(aes(fill = RME)) + 
+  scale_fill_viridis_c(option = "plasma") +
+  ggtitle("Aragón, RME") + xlab("Longitud") + ylab("Latitud") +
+  theme_classic() +
+  theme(axis.text = element_text(hjust = 1, angle = 30)) 
+
+p.rme.plot <- ggplot(aragon.sf) +
+  geom_sf(aes(fill = p.RME)) + 
+  scale_fill_viridis_c(option = "viridis") +
+  ggtitle("Aragón, P(RME>1)") + xlab("Longitud") + ylab("") +
+  theme_classic() +
+  labs(fill = "P(RME>1)") +
+  theme(axis.text = element_text(hjust = 1, angle = 30)) 
+
+wrap_plots(plotlist = list(rme.plot, p.rme.plot))
+```
