@@ -1,8 +1,8 @@
 ---
 # Title options
 title: "Tarea entregable"
-subtitle: "Disease mapping"
-author: "Santiago Ausina, Diego Fernández y Jorge Guitart"
+subtitle: "Disease mapping:Modelo logistico - INLA - Reproducibilidad"
+author: "Santiago Moncalero, Diego Fernández y Jorge Guitart"
 
 # Output options
 format: pdf
@@ -17,6 +17,16 @@ geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
 code-block-bg: white
 code-block-border-left: "82a3b0" # Must be a "hex" value
 ---
+
+# Introduccion
+
+En el contexto del Máster de Bioestadística de la Universitat de València, la reproducibilidad y la replicabilidad se reconocen como pilares fundamentales de la investigación científica. Este principio asegura que los análisis estadísticos puedan ser verificados por terceros y reutilizados en nuevos contextos, fortaleciendo la confianza en los resultados obtenidos y su validez empírica​
+
+En esta práctica, se aborda un análisis reproducible basado en el mapeo de enfermedades (disease mapping), utilizando dos enfoques metodológicos: WingBUGS e INLA. Ambos modelos fueron implementados para estimar tasas de mortalidad y probabilidades ajustadas espacialmente en la región de Aragón. La comparación entre los resultados busca evaluar la consistencia entre ambos métodos y destacar diferencias clave en sus predicciones, empleando herramientas de reproducibilidad como RMarkdown, proyectos de R y rutas relativas​
+
+# Carga de Datos
+
+Para llevar a cabo este análisis reproducible, se utilizaron datos correspondientes a la región de Aragón, los cuales incluyen información geoespacial y de mortalidad. Los pasos de carga y preparación de los datos se llevaron a cabo utilizando rutas relativas y herramientas de R para garantizar la reproducibilidad del trabajo, independientemente de la máquina o el directorio de ejecución​
 
 ```{r libs.y.datos}
 #| include: false
@@ -71,6 +81,7 @@ datos.mod1 <- list(O = aragon.spdf$O,
 # Pedimos los resultados
 params.mod1 <- c("R", "p.R")
 
+set.seed(123)
 # Lanzamos el modelo
 res.mod1 <- bugs(data = datos.mod1, model = mod1,
                  param = params.mod1, inits = inits.mod1)
@@ -81,7 +92,7 @@ res.mod1 <- bugs(data = datos.mod1, model = mod1,
 #| eval: false
 
 # Guardamos el resultado para ahorrar tiempo compilando
-save(res.mod1, file = "./material/resmod1")
+save(res.mod1, file = "material/resmod1")
 ```
 
 ```{r res1.load}
@@ -89,6 +100,7 @@ save(res.mod1, file = "./material/resmod1")
 
 # Ejecutamos un chunk para cargar directamente el resultado
 load("./material/resmod1")
+
 ```
 
 Recuperamos el objeto sf para graficarlo mejor.
@@ -107,18 +119,449 @@ aragon.sf$p.RME <- res.mod1$mean$p.R
 
 rme.plot <- ggplot(aragon.sf) +
   geom_sf(aes(fill = RME)) + 
-  scale_fill_viridis_c(option = "plasma") +
+  scale_fill_viridis_c(option = "rocket",direction = -1) +
   ggtitle("Aragón, RME") + xlab("Longitud") + ylab("Latitud") +
   theme_classic() +
   theme(axis.text = element_text(hjust = 1, angle = 30)) 
 
 p.rme.plot <- ggplot(aragon.sf) +
   geom_sf(aes(fill = p.RME)) + 
-  scale_fill_viridis_c(option = "viridis") +
+  scale_fill_viridis_c(option = "mako",direction=-1) +
   ggtitle("Aragón, P(RME>1)") + xlab("Longitud") + ylab("") +
   theme_classic() +
   labs(fill = "P(RME>1)") +
   theme(axis.text = element_text(hjust = 1, angle = 30)) 
 
 wrap_plots(plotlist = list(rme.plot, p.rme.plot))
+```
+
+```{r}
+#' 
+### --- 0. Loading the packages --- ####
+library(sf)
+library(spdep)
+library(lattice)
+library(latticeExtra)
+library(viridis)
+library(gridExtra)
+library(RColorBrewer)
+library(INLA)
+library(sf)
+library(ggthemes)
+
+
+#BiocManager::install(c("graph", "Rgraphviz"), dep=TRUE)
+library(Rgraphviz)
+library(graph)
+library(leaflet)
+library(ggplot2)
+library(patchwork)
+
+### --- 1. Loading the data --- ####
+#Dataset
+load("material/Aragon.Rdata") #datos
+data <- Aragon.df
+Nareas <- length(data[,1]) #número de áreas
+
+# sf
+aragon_shape <- read_sf("material/aragon.shp") 
+
+aragon_shape <- st_set_crs(aragon_shape, 27700)
+
+ggplot(aragon_shape) +
+  geom_sf() +
+  theme_void()
+
+
+### --- 2. Checking if the data of the sp and the data.frame match --- ####
+# The order of the areas needs to be the same between 
+# the data and the spatial polygon object obtained importing 
+# the shapefile, so we re-order the data.
+data$CODMUNI == aragon_shape$CODMUNI 
+aragon_shape <- aragon_shape[ order(aragon_shape$CODMUNI), ]
+
+
+### ----- 2.1. Plotting the data --- ####
+### ------- 2.1.1. ISQ --- ####
+aragon_shape$isq_raw <- data$O/data$E
+isq_raw.cutoff<- c(0.5, 0.9, 1.3, 8,  1.8)
+isq_raw_disc = cut(aragon_shape$isq_raw,
+                   breaks         = isq_raw.cutoff,
+                   include.lowest = TRUE)
+
+aragon_shape$isq_raw_disc <- isq_raw_disc
+
+plot(aragon_shape["isq_raw_disc"], max.plot = 1,
+     pal =  brewer.pal(9,'Blues')[c(2,4,6,8)],
+     key.pos = 1)
+
+
+### --- 3. Defining neighbor relation --- ####
+temp <- poly2nb(aragon_shape)
+
+#This create a file called ``ARG.graph'' with the graph for INLA
+nb2INLA("ARG.graph", temp)
+
+### ----- 3.1. Plotting the generated graph --- ####
+H <- inla.read.graph(filename="ARG.graph")
+image(inla.graph2matrix(H),xlab="",ylab="") #identifica los vecinos de cada barrio, el barrio 1 tiene por vecinos el 1, 19,20,21,22, etc.
+
+### ----- 3.2. More plotting --- ####
+plot(H)
+
+### ----- 3.3. Plotting the neighbors --- ####
+plot_map_neig_ggplot <- function(neig, aragon_shape, temp) {
+  
+  # Base map of London
+  p <- ggplot() +
+    geom_sf(data = aragon_shape, fill = "white", color = "black") +
+    
+    # Highlight the selected region in red
+    geom_sf(data = aragon_shape[neig, ], fill = "red", color = "black") +
+    
+    # Highlight the neighbors in blue
+    geom_sf(data = aragon_shape[temp[[neig]], ], fill = "blue", color = "black") +
+    
+    # Set the theme
+    theme_minimal() +
+    ggtitle(paste("Selected region:", aragon_shape$NOMBRE[neig])) +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # Print the plot
+  print(p)
+  
+  # Print information about the selected region and its neighbors
+  cat("You have selected", aragon_shape$NOMBRE[neig], "and its neighbors are:", "\n")
+  cat(aragon_shape$NOMBRE[temp[[neig]]], "\n")
+}
+#esta funcion identifica los vecinos de cada vecindario en concreto
+
+plot_map_neig_ggplot(neig = 30, aragon_shape, temp = temp) 
+plot_map_neig_ggplot(neig = 25, aragon_shape, temp = temp)
+plot_map_neig_ggplot(neig = 23, aragon_shape, temp = temp)
+
+### --- 4. Fitting a model with bym effect --- ####
+### ----- 4.0. Adding ids for the random effects --- ####
+S <- U <- seq(1,729) # crea dos veces el mismo índice, uno para el efecto aleatorio espacial y otro para el iid. 
+data <- cbind(data, S, U)
+
+
+### ----- 4.1. Formula --- ####
+formula <- O ~ 1 + f(S, 
+                     model       = "besag", 
+                     graph       = H,
+                     scale.model = TRUE,
+                     hyper       = 
+                       list(prec = list(prior="loggamma",param = c(1,0.001)))) +
+  f(U, 
+    model       = "iid",
+    hyper       = 
+      list(prec = list(prior="loggamma",param = c(1,0.001))))
+
+
+### ----- 4.2. Model --- ####
+set.seed(123)
+mod.isq <- inla(formula,
+                family          = "poisson",
+                data            = data,
+                E               = E, #es el offset, se puede poner como offset o como esperados
+                control.compute = list(dic = TRUE, waic = TRUE, cpo = TRUE),
+                control.predictor = list(compute=TRUE, cdf=c(log(1)))) #cdf = cumulative density function, calcula la probabilidad de que la función de desnidad acumulada sea mayor que (valor introducido, en este caso 1). En logaritmo porque a INLA le gusta más y porque la prior es loggamma. Se puede calcular después. Si pones verbose = TRUE aparece el proceso de computación, si no estará en el log file. 
+
+summary(mod.isq)
+
+
+
+### ----- 4.3. Posterior distribution of the random effects --- ####
+aragon_shape$SPmean <- round(mod.isq$summary.random$S[["mean"]], 4)
+aragon_shape$SPsd <- round(mod.isq$summary.random$S[["sd"]],5)
+
+#Mean posterior distribution
+a <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = SPmean), color = "white") +
+  scale_fill_viridis_c(option = "magma",begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(legend.position="bottom",
+        plot.title = element_text(hjust = 0.5,
+                                  color = "Gray40",
+                                  size = 20,
+                                  face = "bold"),
+        legend.title = element_blank(),
+        plot.subtitle = element_text(color = "blue"),
+        plot.caption = element_text(color = "Gray60")) +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = 1.5)) +  # Adjusting the legend size
+  ggtitle("Mean posterior of S") 
+
+#Sd posterior distribution
+b <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = SPsd), color = "white") +
+  scale_fill_viridis_c(option = "magma",begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(legend.position="bottom",
+        plot.title = element_text(hjust = 0.5,
+                                  color = "Gray40",
+                                  size = 20,
+                                  face = "bold"),
+        legend.title = element_blank(),
+        plot.subtitle = element_text(color = "blue"),
+        plot.caption = element_text(color = "Gray60")) +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = 1.5)) +  # Adjusting the legend size
+  ggtitle("SD posterior of S") 
+
+a | b
+
+
+aragon_shape$UPmean <- round(mod.isq$summary.random$U[["mean"]], 4)
+aragon_shape$UPsd <- round(mod.isq$summary.random$U[["sd"]],5)
+
+#Mean posterior distribution
+c <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = UPmean), color = "white") +
+  scale_fill_viridis_c(option = "magma",begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(legend.position="bottom",
+        plot.title = element_text(hjust = 0.5,
+                                  color = "Gray40",
+                                  size = 20,
+                                  face = "bold"),
+        legend.title = element_blank(),
+        plot.subtitle = element_text(color = "blue"),
+        plot.caption = element_text(color = "Gray60")) +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = 1.5)) +  # Adjusting the legend size
+  ggtitle("Mean posterior of U") 
+
+#Sd posterior distribution
+d <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = UPsd), color = "white") +
+  scale_fill_viridis_c(option = "magma",begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(legend.position="bottom",
+        plot.title = element_text(hjust = 0.5,
+                                  color = "Gray40",
+                                  size = 20,
+                                  face = "bold"),
+        legend.title = element_blank(),
+        plot.subtitle = element_text(color = "blue"),
+        plot.caption = element_text(color = "Gray60")) +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = 1.5)) +  # Adjusting the legend size
+  ggtitle("SD posterior of U") 
+
+c | d
+### --- 4.4. Posterior distribution of suicides mortality --- ####
+aragon_shape$isq_mean <- mod.isq$summary.fitted.values$mean # mean
+aragon_shape$isq_sd <- mod.isq$summary.fitted.values$sd #s
+aragon_shape$isq_median <- mod.isq$summary.fitted.values$`0.5quant` # median
+aragon_shape$isq_q025 <- mod.isq$summary.fitted.values$`0.025quant` # quantile
+aragon_shape$isq_q975 <- mod.isq$summary.fitted.values$`0.975quant` # quantile
+aragon_shape$isq_p1 <- 1 - mod.isq$summary.fitted.values$`1cdf` # probability to be greater than 1
+
+### --- 4.5. Posterior distribution of suicides SMR with cutoff--- ####
+## Also, the probability for SMR to be greater than 1.
+
+isq_disc1 <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = isq_mean), color = "white") +
+  scale_fill_viridis_b(option = "magma", begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(
+      hjust = 0.5,
+      color = "Gray40",
+      size = 20,
+      face = "bold"
+    ),
+    legend.title = element_blank(),
+    plot.subtitle = element_text(color = "blue"),
+    plot.caption = element_text(color = "Gray60")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5)) +
+  ggtitle("Mean posterior RME")
+
+
+isq_disc2 <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = isq_p1), color = "white") +
+  scale_fill_viridis_b(option = "magma", begin = 0.1, direction = -1) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(
+      hjust = 0.5,
+      color = "Gray40",
+      size = 20,
+      face = "bold"
+    ),
+    legend.title = element_blank(),
+    plot.subtitle = element_text(color = "blue"),
+    plot.caption = element_text(color = "Gray60")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5)) +
+  ggtitle("P(RME>1)")
+
+
+isq_disc1 | isq_disc2
+
+
+```
+
+```{r}
+#| fig.height: 12
+#| fig.width: 10
+#| fig.align: "center"
+
+library(ggplot2)
+library(patchwork)
+
+# Gráfico INLA: Media posterior
+inla_mean_plot <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = isq_mean), color = "white") +
+  scale_fill_viridis_c(option = "rocket",direction = -1) +
+  ggtitle("Aragón, Media posterior (INLA)") +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    axis.text = element_text(hjust = 1, angle = 30),
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
+
+# Gráfico INLA: Probabilidad (SMR > 1)
+inla_p_plot <- ggplot(data = aragon_shape) +
+  geom_sf(aes(fill = isq_p1), color = "white") +
+  scale_fill_viridis_c(option = "mako", direction=-1) +
+  ggtitle("Aragón, P(SMR > 1) (INLA)") +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    axis.text = element_text(hjust = 1, angle = 30),
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
+
+# Gráfico WingBUGS: Media (RME)
+rme_plot <- ggplot(data = aragon.sf) +
+  geom_sf(aes(fill = RME), color = "white") +
+  scale_fill_viridis_c(option = "rocket",direction = -1) +
+  ggtitle("Aragón, Media posterior (WingBUGS)") +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    axis.text = element_text(hjust = 1, angle = 30),
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
+
+# Gráfico WingBUGS: Probabilidad (RME > 1)
+p_rme_plot <- ggplot(data = aragon.sf) +
+  geom_sf(aes(fill = p.RME), color = "white") +
+  scale_fill_viridis_c(option = "mako",direction = -1) +
+  ggtitle("Aragón, P(RME > 1) (WingBUGS)") +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    axis.text = element_text(hjust = 1, angle = 30),
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold")
+  ) +
+  guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
+
+# Organización de los gráficos en una cuadrícula 2x2
+final_plot <- (rme_plot | p_rme_plot) /
+              (inla_mean_plot | inla_p_plot)
+
+# Mostrar los gráficos
+final_plot
+
+```
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+
+## 1. Resumen descriptivo
+descriptive_stats <- aragon_shape %>%
+  summarise(
+    mean_INLA_RME = mean(isq_mean, na.rm = TRUE),
+    sd_INLA_RME = sd(isq_mean, na.rm = TRUE),
+    mean_WingBUGS_RME = mean(aragon.sf$RME, na.rm = TRUE),
+    sd_WingBUGS_RME = sd(aragon.sf$RME, na.rm = TRUE),
+    mean_INLA_p = mean(isq_p1, na.rm = TRUE),
+    sd_INLA_p = sd(isq_p1, na.rm = TRUE),
+    mean_WingBUGS_p = mean(aragon.sf$p.RME, na.rm = TRUE),
+    sd_WingBUGS_p = sd(aragon.sf$p.RME, na.rm = TRUE)
+  )
+descriptive_stats
+
+## 2. Correlación
+cor_RME <- cor(aragon.sf$RME, aragon_shape$isq_mean, use = "complete.obs")
+cor_p <- cor(aragon.sf$p.RME, aragon_shape$isq_p1, use = "complete.obs")
+
+cat("Correlación entre RME (WingBUGS e INLA):", cor_RME, "\n")
+cat("Correlación entre P(RME>1) (WingBUGS e INLA):", cor_p, "\n")
+
+## 3. Test de diferencias estadísticas
+t_test_RME <- t.test(aragon.sf$RME, aragon_shape$isq_mean, paired = TRUE)
+t_test_p <- t.test(aragon.sf$p.RME, aragon_shape$isq_p1, paired = TRUE)
+
+t_test_RME
+t_test_p
+
+## 4. Bland-Altman
+bland_altman_data <- aragon.sf %>%
+  mutate(
+    mean_RME = (RME + aragon_shape$isq_mean) / 2,
+    diff_RME = RME - aragon_shape$isq_mean,
+    mean_p = (p.RME + aragon_shape$isq_p1) / 2,
+    diff_p = p.RME - aragon_shape$isq_p1
+  )
+
+bland_RME_plot <- ggplot(bland_altman_data, aes(x = mean_RME, y = diff_RME)) +
+  geom_point(color = "blue", alpha = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  ggtitle("Bland-Altman para RME") +
+  xlab("Media (WingBUGS e INLA)") + ylab("Diferencia (WingBUGS - INLA)") +
+  theme_minimal()
+
+bland_p_plot <- ggplot(bland_altman_data, aes(x = mean_p, y = diff_p)) +
+  geom_point(color = "blue", alpha = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  ggtitle("Bland-Altman para P(RME > 1)") +
+  xlab("Media (WingBUGS e INLA)") + ylab("Diferencia (WingBUGS - INLA)") +
+  theme_minimal()
+
+grid.arrange(bland_RME_plot, bland_p_plot, nrow = 2)
+
+## 5. Gráficos de dispersión
+scatter_RME <- ggplot(data = NULL, aes(x = aragon.sf$RME, y = aragon_shape$isq_mean)) +
+  geom_point(color = "darkgreen", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Dispersión RME: WingBUGS vs. INLA") +
+  xlab("WingBUGS (RME)") + ylab("INLA (RME)") +
+  theme_classic()
+
+scatter_p <- ggplot(data = NULL, aes(x = aragon.sf$p.RME, y = aragon_shape$isq_p1)) +
+  geom_point(color = "darkblue", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Dispersión P(RME>1): WingBUGS vs. INLA") +
+  xlab("WingBUGS (P(RME>1))") + ylab("INLA (P(RME>1))") +
+  theme_classic()
+
+grid.arrange(scatter_RME, scatter_p, nrow = 2)
+
+```
+
+```{r prueba}
+
+datitos <- data.frame("winbugs" = res.mod1$mean$R, "INLA" = mod.isq$summary.fitted.values$mean)
+
+
+grafiquito1 <- ggplot(datitos) +
+  geom_density(aes(INLA, col = "blue", fill = "blue", alpha = 0.5)) +
+  geom_density(aes(winbugs, col = "red", fill = "red", alpha = 0.5))
+
+
+grafiquito1
 ```
