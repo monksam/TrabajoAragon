@@ -10,12 +10,13 @@ editor: visual
 lang: es
 execute: 
   warning: false
-
+  
 # Style options
 fontsize: 10pt
 geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
 code-block-bg: white
 code-block-border-left: "82a3b0" # Must be a "hex" value
+
 ---
 
 # Introduccion
@@ -158,13 +159,14 @@ load("./material/resmod1")
 ```
 
 ```{r datos.2}
+#| echo: false
 
 # Añadimos al data.frame las columnas RME y p.RME
 aragon.sf$RME <- res.mod1$mean$R
 aragon.sf$p.RME <- res.mod1$mean$p.R
 ```
 
-```{r}
+```{r INLA}
 #| echo: false
 
 ### --- 1. Cargando los datos --- ####
@@ -204,6 +206,8 @@ aragon_shape$isq_raw_disc <- isq_raw_disc
 ### --- 3. Definiendo la relación de vecinos espaciales --- ####
 # Crear la relación de vecinos espaciales usando el shapefile
 temp <- poly2nb(aragon_shape)
+
+nb2INLA("ARG.graph", temp)
 
 ### --- 3.1. Graficando el grafo generado --- ####
 # Leer el grafo desde un archivo
@@ -260,7 +264,9 @@ aragon_shape$isq_p1 <- 1 - mod.isq$summary.fitted.values$`1cdf`  # Probabilidad 
 
 ```
 
-#Resultados: Mapas de RME y RME \> 1
+\newpage
+
+# Resultados: Mapas de RME y RME \> 1
 
 En este apartado, se presentan los mapas resultantes del análisis de tasas de mortalidad ajustadas, específicamente el Riesgo Relativo Estandarizado (RME) y las áreas donde RME \> 1, utilizando dos metodologías: WinBUGS e INLA.
 
@@ -273,8 +279,9 @@ Esta convergencia en los resultados refuerza la validez de los modelos implement
 ```{r}
 #| fig.height: 12
 #| fig.width: 10
-#| fig.align: "center"
 #| echo: false
+#| fig.align: "center"
+#| fig.caption: "Mapeo de modelos realizados por INLA y WINGBUGS"
 
 
 # Gráfico INLA: Media posterior
@@ -338,21 +345,21 @@ final_plot
 
 ```
 
+\newpage
+
 # Correlación entre Resultados de WingBUGS e INLA
 
 Para evaluar cuantitativamente la similitud entre los resultados obtenidos mediante las metodologías WinBUGS e INLA, se calculó la correlación entre las estimaciones de RME y las probabilidades de que RME \> 1.
 
-Los coeficientes de correlación obtenidos son notablemente altos:
 
--   Correlación entre RME: 0.9786
--   Correlación entre P(RME \> 1): 0.9831
-
-Estos valores reflejan una excelente concordancia entre los dos enfoques, lo que respalda la consistencia de las estimaciones generadas independientemente del método utilizado. Tal nivel de similitud indica que ambos modelos logran capturar de manera adecuada los patrones subyacentes en los datos, tanto en las tasas ajustadas como en las probabilidades asociadas a riesgos relativos superiores al promedio.
 
 ```{r}
 #| echo: false
 #| message: false
 #| warning: false
+#| fig.align: "center"
+#| fig.caption: "Disperciones entre modelos"
+
 
 library(dplyr)
 library(ggplot2)
@@ -383,6 +390,14 @@ scatter_p <- ggplot(data = NULL, aes(x = aragon.sf$p.RME, y = aragon_shape$isq_p
 grid.arrange(scatter_RME, scatter_p, nrow = 2)
 
 ```
+Los coeficientes de correlación obtenidos son notablemente altos:
+
+-   Correlación entre RME: 0.9786
+-   Correlación entre P(RME \> 1): 0.9831
+
+Estos valores reflejan una excelente concordancia entre los dos enfoques, lo que respalda la consistencia de las estimaciones generadas independientemente del método utilizado. Tal nivel de similitud indica que ambos modelos logran capturar de manera adecuada los patrones subyacentes en los datos, tanto en las tasas ajustadas como en las probabilidades asociadas a riesgos relativos superiores al promedio.
+
+\newpage
 
 # Comparación de las Densidades Esperadas
 
@@ -390,14 +405,16 @@ En este apartado, se comparan las distribuciones de las densidades esperadas est
 
 Al graficar las densidades esperadas de ambos métodos, se observa una similitud destacable en las formas de las distribuciones. Ambas presentan una distribución unimodal con patrones que indican consistencia en las estimaciones. Las diferencias, aunque mínimas, pueden atribuirse a la forma en que cada metodología aborda el ajuste:
 
-WinBUGS: Utiliza simulaciones Monte Carlo, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución. INLA: Recurre a aproximaciones determinísticas, lo que se traduce en estimaciones más rápidas, aunque puede suavizar ligeramente las colas de la distribución. A pesar de estas diferencias técnicas, las distribuciones esperadas de ambos modelos muestran un alto grado de solapamiento, lo que refuerza la confianza en los resultados obtenidos y la consistencia de las metodologías aplicadas.
+- WinBUGS: Utiliza simulaciones Monte Carlo, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución. 
+
+- INLA: Recurre a aproximaciones determinísticas, lo que se traduce en estimaciones más rápidas, aunque puede suavizar ligeramente las colas de la distribución. A pesar de estas diferencias técnicas, las distribuciones esperadas de ambos modelos muestran un alto grado de solapamiento, lo que refuerza la confianza en los resultados obtenidos y la consistencia de las metodologías aplicadas.
 
 La similitud en las densidades esperadas refleja que ambos enfoques capturan de manera adecuada los patrones subyacentes en los datos y que las diferencias metodológicas no impactan significativamente en la interpretación global de los resultados. Esto demuestra que ambos métodos son igualmente válidos y confiables para realizar análisis de mapeo de enfermedades en contextos similares.
 
 ```{r graficomedias}
 #| echo: false
-#| fig.height: 8
-#| fig.width: 10
+#| fig.height: 6
+#| fig.width: 8
 #| fig.align: "center"
 #| fig.caption: "Gráfico de densidad de la media"
 
