@@ -32,7 +32,10 @@ Para llevar a cabo este análisis reproducible, se utilizaron datos correspondie
 #| include: false
 
 # Cargamos librerías y datos
-pacman::p_load(sf, spdep, sp, R2WinBUGS, ggplot2, patchwork)
+
+#install.packages("BiocManager")
+#install.packages("pacman")
+pacman::p_load(sf, spdep, sp, R2WinBUGS, ggplot2, patchwork, )
 load("./material/Aragon.Rdata")
 aragon.sf <- st_read("./material/aragon.shp")
 
@@ -116,6 +119,7 @@ aragon.sf$p.RME <- res.mod1$mean$p.R
 #| fig.height: 5.5
 #| fig.width: 9
 #| fig.align: "center"
+#| fig.caption: ""
 
 rme.plot <- ggplot(aragon.sf) +
   geom_sf(aes(fill = RME)) + 
@@ -136,7 +140,8 @@ wrap_plots(plotlist = list(rme.plot, p.rme.plot))
 ```
 
 ```{r}
-#' 
+#| echo: false
+
 ### --- 0. Loading the packages --- ####
 library(sf)
 library(spdep)
@@ -154,8 +159,6 @@ library(ggthemes)
 library(Rgraphviz)
 library(graph)
 library(leaflet)
-library(ggplot2)
-library(patchwork)
 
 ### --- 1. Loading the data --- ####
 #Dataset
