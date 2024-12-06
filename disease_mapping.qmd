@@ -1,7 +1,7 @@
 ---
 # Title options
 title: "Tarea entregable"
-subtitle: "Disease mapping:Modelo logistico - INLA - Reproducibilidad"
+subtitle: "Disease mapping: Modelo logistico - INLA - Reproducibilidad"
 author: "Santiago Moncalero, Diego Fernández y Jorge Guitart"
 
 # Output options
@@ -13,10 +13,9 @@ execute:
   
 # Style options
 fontsize: 10pt
-geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
+#geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
 code-block-bg: white
 code-block-border-left: "82a3b0" # Must be a "hex" value
-
 ---
 
 # Introduccion
@@ -48,7 +47,8 @@ pacman::p_load(
   ggthemes,     # Temas para gráficos con ggplot2
   Rgraphviz,    # Para leer gráficos
   graph,        # Para crear grafos
-  leaflet       # Para mapas interactivos
+  leaflet,      # Para mapas interactivos
+  dplyr         # Para manipulación de datos
 )
 
 # Cargamos los datos
@@ -96,22 +96,22 @@ mod1 <- function() {
   m ~ dflat()
   
   # Definimos las precisiones de los efectos heterogéneos y espaciales
-  prechet <- pow(sdhet, -2)  # Precisión del efecto heterogéneo
-  precsp <- pow(sdsp, -2)    # Precisión del efecto espacial
+  prechet <- pow(sdhet, -2)   # Precisión del efecto heterogéneo
+  precsp <- pow(sdsp, -2)     # Precisión del efecto espacial
   
   # Priors para las desviaciones estándar de los efectos
-  sdhet ~ dunif(0, 10)  # Priori uniforme para sdhet
-  sdsp ~ dunif(0, 10)   # Priori uniforme para sdsp
+  sdhet ~ dunif(0, 10)        # Priori uniforme para sdhet
+  sdsp ~ dunif(0, 10)         # Priori uniforme para sdsp
   
   # Calculamos la probabilidad de que R sea mayor que 1
   for (j in 1:nObs) {
-    p.R[j] <- step(R[j] - 1) # Si R es mayor que 1, p.R será 1, sino 0
+    p.R[j] <- step(R[j] - 1)  # Si R es mayor que 1, p.R será 1, sino 0
   }
 }
 
 # Definimos la función para inicializar los valores del modelo
 inits.mod1 <- function() {
-  list(m = rnorm(1),         # Inicializamos m con una distribución normal
+  list(m = rnorm(1),          # Inicializamos m con una distribución normal
        sdhet = runif(1),      # Inicializamos sdhet con una distribución uniforme
        sdsp = runif(1))       # Inicializamos sdsp con una distribución uniforme
 }
@@ -134,10 +134,10 @@ set.seed(123)
 
 # Ejecutamos el modelo con el paquete BUGS
 res.mod1 <- bugs(
-  data = datos.mod1,      # Datos del modelo
-  model = mod1,           # Función que define el modelo
-  param = params.mod1,    # Parámetros que queremos obtener
-  inits = inits.mod1      # Valores iniciales del modelo
+  data = datos.mod1,          # Datos del modelo
+  model = mod1,               # Función que define el modelo
+  param = params.mod1,        # Parámetros que queremos obtener
+  inits = inits.mod1          # Valores iniciales del modelo
 )
 
 ```
@@ -155,7 +155,6 @@ save(res.mod1, file = "material/resmod1")
 
 # Ejecutamos un chunk para cargar directamente el resultado
 load("./material/resmod1")
-
 ```
 
 ```{r datos.2}
@@ -169,7 +168,8 @@ aragon.sf$p.RME <- res.mod1$mean$p.R
 ```{r INLA}
 #| echo: false
 
-### --- 1. Cargando los datos --- ####
+#### --- 1. Cargando los datos --- ####
+
 # Carga del conjunto de datos
 load("material/Aragon.Rdata")  # Carga los datos de Aragón
 data <- Aragon.df              # Asigna los datos a una variable
@@ -183,14 +183,17 @@ aragon_shape <- read_sf("material/aragon.shp")
 # Establecer el sistema de coordenadas
 aragon_shape <- st_set_crs(aragon_shape, 27700)
 
-### --- 2. Verificando que los datos del shapefile y el data.frame coincidan --- ####
+#### --- 2. Verificando que los datos del sf y el data.frame coincidan --- ####
+
 # El orden de las áreas debe ser el mismo entre los datos y el objeto espacial,
 # por lo que reordenamos los datos para asegurar que coincidan.
 
 aragon_shape <- aragon_shape[order(aragon_shape$CODMUNI), ]
 
-### --- 2.1. Graficando los datos --- ####
-### ------- 2.1.1. ISQ --- ####
+#### --- 2.1. Graficando los datos --- ####
+
+#### ------- 2.1.1. ISQ ------- ####
+
 # Creación de una variable para la tasa de suicidio (ISQ)
 aragon_shape$isq_raw <- data$O / data$E  # Tasa de suicidio (observado/esperado)
 
@@ -203,25 +206,30 @@ isq_raw_disc <- cut(aragon_shape$isq_raw,
 # Asignar la clasificación de ISQ al shapefile
 aragon_shape$isq_raw_disc <- isq_raw_disc
 
-### --- 3. Definiendo la relación de vecinos espaciales --- ####
-# Crear la relación de vecinos espaciales usando el shapefile
+#### --- 3. Definiendo la relación de vecinos espaciales --- ####
+
+# Crear la relación de vecinos espaciales usando el sf
 temp <- poly2nb(aragon_shape)
 
 nb2INLA("ARG.graph", temp)
 
-### --- 3.1. Graficando el grafo generado --- ####
+#### --- 3.1. Graficando el grafo generado --- ####
+
 # Leer el grafo desde un archivo
 H <- inla.read.graph(filename="ARG.graph")
 
-### --- 4. Ajustando el modelo con efecto BYM --- ####
-### ----- 4.0. Añadiendo identificadores para los efectos aleatorios --- ####
+#### --- 4. Ajustando el modelo con efecto BYM --- ####
+
+#### --- 4.0. Añadiendo identificadores para los efectos aleatorios --- ####
+
 # Crear índices para los efectos aleatorios espaciales (S) y no espaciales (U)
 S <- U <- seq(1, 729)  # Crea dos índices, uno para cada tipo de efecto
 
 # Añadir los índices a los datos
 data <- cbind(data, S, U)
 
-### ----- 4.1. Definiendo la fórmula del modelo --- ####
+### --- 4.1. Definiendo la fórmula del modelo --- ####
+
 # Fórmula del modelo: se usa un modelo de efectos aleatorios con BYM (Besag-York-Mollié)
 formula <- O ~ 1 + f(S, 
                      model = "besag", 
@@ -232,7 +240,8 @@ formula <- O ~ 1 + f(S,
     model = "iid",
     hyper = list(prec = list(prior = "loggamma", param = c(1, 0.001))))
 
-### ----- 4.2. Ajuste del modelo --- ####
+### --- 4.2. Ajuste del modelo --- ####
+
 # Ajustar el modelo usando INLA
 set.seed(123)  # Establecer semilla para reproducibilidad
 mod.isq <- inla(formula,
@@ -242,7 +251,8 @@ mod.isq <- inla(formula,
                 control.compute = list(dic = TRUE, waic = TRUE, cpo = TRUE), # Cálculo de DIC, WAIC y CPO
                 control.predictor = list(compute = TRUE, cdf = c(log(1)))) # CDF: probabilidad acumulada (logarítmica)
 
-### ----- 4.3. Distribución posterior de los efectos aleatorios --- ####
+### --- 4.3. Distribución posterior de los efectos aleatorios --- ####
+
 # Obtener y almacenar los resultados de los efectos aleatorios (espaciales)
 aragon_shape$SPmean <- round(mod.isq$summary.random$S[["mean"]], 4)
 aragon_shape$SPsd <- round(mod.isq$summary.random$S[["sd"]], 5)
@@ -252,6 +262,7 @@ aragon_shape$UPmean <- round(mod.isq$summary.random$U[["mean"]], 4)
 aragon_shape$UPsd <- round(mod.isq$summary.random$U[["sd"]], 5)
 
 ### --- 4.4. Distribución posterior de la mortalidad por suicidio --- ####
+
 # Almacenar las distribuciones posteriores de la tasa de suicidio
 aragon_shape$isq_mean <- mod.isq$summary.fitted.values$mean    # Media
 aragon_shape$isq_sd <- mod.isq$summary.fitted.values$sd        # Desviación estándar
@@ -259,12 +270,7 @@ aragon_shape$isq_median <- mod.isq$summary.fitted.values$`0.5quant`  # Mediana
 aragon_shape$isq_q025 <- mod.isq$summary.fitted.values$`0.025quant` # Cuantil 2.5%
 aragon_shape$isq_q975 <- mod.isq$summary.fitted.values$`0.975quant` # Cuantil 97.5%
 aragon_shape$isq_p1 <- 1 - mod.isq$summary.fitted.values$`1cdf`  # Probabilidad de ser mayor que 1
-
-
-
 ```
-
-\newpage
 
 # Resultados: Mapas de RME y RME \> 1
 
@@ -276,12 +282,12 @@ La consistencia entre los resultados de WinBUGS e INLA se puede atribuir a la ca
 
 Esta convergencia en los resultados refuerza la validez de los modelos implementados y sugiere que ambos métodos son herramientas confiables para el análisis de datos espaciales en contextos de mapeo de enfermedades. La elección entre uno u otro dependerá, en última instancia, de las necesidades específicas del análisis, como la velocidad de procesamiento (ventaja de INLA) o la exploración de incertidumbre más detallada (fortaleza de WinBUGS).
 
-```{r}
-#| fig.height: 12
-#| fig.width: 10
+```{r plots}
+#| fig.height: 9.5
+#| fig.width: 9
 #| echo: false
 #| fig.align: "center"
-#| fig.caption: "Mapeo de modelos realizados por INLA y WINGBUGS"
+#| fig.cap: "Mapeo de modelos realizados por INLA y WinBUGS."
 
 
 # Gráfico INLA: Media posterior
@@ -290,6 +296,7 @@ inla_mean_plot <- ggplot(data = aragon_shape) +
   scale_fill_viridis_c(option = "rocket",direction = -1) +
   ggtitle("Aragón, Media posterior (INLA)") +
   theme_classic() +
+  labs(fill = "RME") +
   theme(
     legend.position = "bottom",
     axis.text = element_text(hjust = 1, angle = 30),
@@ -303,6 +310,7 @@ inla_p_plot <- ggplot(data = aragon_shape) +
   scale_fill_viridis_c(option = "mako", direction=-1) +
   ggtitle("Aragón, P(RME > 1) (INLA)") +
   theme_classic() +
+  labs(fill = "P(RME>1)") +
   theme(
     legend.position = "bottom",
     axis.text = element_text(hjust = 1, angle = 30),
@@ -314,8 +322,9 @@ inla_p_plot <- ggplot(data = aragon_shape) +
 rme_plot <- ggplot(data = aragon.sf) +
   geom_sf(aes(fill = RME), color = "white") +
   scale_fill_viridis_c(option = "rocket",direction = -1) +
-  ggtitle("Aragón, Media posterior (WingBUGS)") +
+  ggtitle("Aragón, Media posterior (WinBUGS)") +
   theme_classic() +
+  labs(fill = "RME") +
   theme(
     legend.position = "bottom",
     axis.text = element_text(hjust = 1, angle = 30),
@@ -327,8 +336,9 @@ rme_plot <- ggplot(data = aragon.sf) +
 p_rme_plot <- ggplot(data = aragon.sf) +
   geom_sf(aes(fill = p.RME), color = "white") +
   scale_fill_viridis_c(option = "mako",direction = -1) +
-  ggtitle("Aragón, P(RME > 1) (WingBUGS)") +
+  ggtitle("Aragón, P(RME > 1) (WinBUGS)") +
   theme_classic() +
+  labs(fill = "P(RME>1)") +
   theme(
     legend.position = "bottom",
     axis.text = element_text(hjust = 1, angle = 30),
@@ -336,13 +346,13 @@ p_rme_plot <- ggplot(data = aragon.sf) +
   ) +
   guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
 
-# Organización de los gráficos en una cuadrícula 2x2
-final_plot <- (rme_plot | inla_mean_plot ) /
-              (p_rme_plot| inla_p_plot)
+# Organización de los gráficos
+final_plot <- wrap_plots(inla_mean_plot, plot_spacer(), rme_plot, 
+                         inla_p_plot, plot_spacer(), p_rme_plot,
+                         ncol = 3, nrow = 2, widths = c(2, 0, 2, 2, 0, 2))
 
 # Mostrar los gráficos
 final_plot
-
 ```
 
 \newpage
@@ -351,19 +361,14 @@ final_plot
 
 Para evaluar cuantitativamente la similitud entre los resultados obtenidos mediante las metodologías WinBUGS e INLA, se calculó la correlación entre las estimaciones de RME y las probabilidades de que RME \> 1.
 
-
-
-```{r}
+```{r evaluacion}
 #| echo: false
 #| message: false
 #| warning: false
+#| fig.width: 8
+#| fig.height: 4.5
 #| fig.align: "center"
-#| fig.caption: "Disperciones entre modelos"
-
-
-library(dplyr)
-library(ggplot2)
-library(gridExtra)
+#| fig.cap: "Dispersiones entre modelos."
 
 ## Correlación
 cor_RME <- cor(aragon.sf$RME, aragon_shape$isq_mean, use = "complete.obs")
@@ -390,6 +395,7 @@ scatter_p <- ggplot(data = NULL, aes(x = aragon.sf$p.RME, y = aragon_shape$isq_p
 grid.arrange(scatter_RME, scatter_p, nrow = 2)
 
 ```
+
 Los coeficientes de correlación obtenidos son notablemente altos:
 
 -   Correlación entre RME: 0.9786
@@ -405,18 +411,18 @@ En este apartado, se comparan las distribuciones de las densidades esperadas est
 
 Al graficar las densidades esperadas de ambos métodos, se observa una similitud destacable en las formas de las distribuciones. Ambas presentan una distribución unimodal con patrones que indican consistencia en las estimaciones. Las diferencias, aunque mínimas, pueden atribuirse a la forma en que cada metodología aborda el ajuste:
 
-- WinBUGS: Utiliza simulaciones Monte Carlo, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución. 
+-   WinBUGS: Utiliza simulaciones Monte Carlo, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución.
 
-- INLA: Recurre a aproximaciones determinísticas, lo que se traduce en estimaciones más rápidas, aunque puede suavizar ligeramente las colas de la distribución. A pesar de estas diferencias técnicas, las distribuciones esperadas de ambos modelos muestran un alto grado de solapamiento, lo que refuerza la confianza en los resultados obtenidos y la consistencia de las metodologías aplicadas.
+-   INLA: Recurre a aproximaciones determinísticas, lo que se traduce en estimaciones más rápidas, aunque puede suavizar ligeramente las colas de la distribución. A pesar de estas diferencias técnicas, las distribuciones esperadas de ambos modelos muestran un alto grado de solapamiento, lo que refuerza la confianza en los resultados obtenidos y la consistencia de las metodologías aplicadas.
 
 La similitud en las densidades esperadas refleja que ambos enfoques capturan de manera adecuada los patrones subyacentes en los datos y que las diferencias metodológicas no impactan significativamente en la interpretación global de los resultados. Esto demuestra que ambos métodos son igualmente válidos y confiables para realizar análisis de mapeo de enfermedades en contextos similares.
 
 ```{r graficomedias}
 #| echo: false
-#| fig.height: 6
+#| fig.height: 4.5
 #| fig.width: 8
 #| fig.align: "center"
-#| fig.caption: "Gráfico de densidad de la media"
+#| fig.cap: "Gráficos de densidad de la media."
 
 
 Datos_medias <- data.frame("winbugs" = res.mod1$mean$R, "INLA" = mod.isq$summary.fitted.values$mean)
