@@ -131,7 +131,7 @@ params_model_wingbugs <- c("R", "p.R")
 set.seed(123)
 
 # Ejecutamos el modelo con el paquete BUGS
-res_model_wingbugs <- bugs(
+res_model_winbugs <- bugs(
   data = model_data_winbugs,          # Datos del modelo
   model = spatial_model_winbugs,               # Función que define el modelo
   param = params_model_wingbugs,        # Parámetros que queremos obtener
@@ -145,22 +145,22 @@ res_model_wingbugs <- bugs(
 #| eval: false
 
 # Guardamos el resultado para ahorrar tiempo compilando
-save(res_model_wingbugs, file = "material/resmod1")
+save(res_model_winbugs, file = "material/res_model_winbugs.Rdata")
 ```
 
 ```{r res1.load}
 #| echo: false
 
 # Ejecutamos un chunk para cargar directamente el resultado
-load("./material/resmod1")
+load("./material/res_model_winbugs.Rdata")
 ```
 
 ```{r datos.2}
 #| echo: false
 
 # Añadimos al data.frame las columnas RME y p.RME
-spatial_data$RME <- res.mod1$mean$R
-spatial_data$p.RME <- res.mod1$mean$p.R
+spatial_data$RME <- res_model_winbugs$mean$R
+spatial_data$p.RME <- res_model_winbugs$mean$p.R
 ```
 
 ```{r INLA}
@@ -281,7 +281,7 @@ La consistencia entre los resultados de WinBUGS e INLA se puede atribuir a la ca
 Esta convergencia en los resultados refuerza la validez de los modelos implementados y sugiere que ambos métodos son herramientas confiables para el análisis de datos espaciales en contextos de mapeo de enfermedades. La elección entre uno u otro dependerá, en última instancia, de las necesidades específicas del análisis, como la velocidad de procesamiento (ventaja de INLA) o la exploración de incertidumbre más detallada (fortaleza de WinBUGS).
 
 ```{r plots}
-#| fig.height: 9.5
+#| fig.height: 9
 #| fig.width: 9
 #| echo: false
 #| fig.align: "center"
@@ -423,7 +423,7 @@ La similitud en las densidades esperadas refleja que ambos enfoques capturan de 
 #| fig.cap: "Gráficos de densidad de la media."
 
 
-Datos_medias <- data.frame("winbugs" = res_model_wingbugs$mean$R, "INLA" = spatial_model_inla$summary.fitted.values$mean)
+Datos_medias <- data.frame("winbugs" = res_model_winbugs$mean$R, "INLA" = spatial_model_inla$summary.fitted.values$mean)
 
 # Creación del gráfico de densidad
 graficomedias <- ggplot(Datos_medias) +
