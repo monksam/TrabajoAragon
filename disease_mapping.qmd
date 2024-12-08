@@ -1,8 +1,7 @@
 ---
 # Title options
-title: "Tarea entregable"
-subtitle: "Disease mapping: Modelo logistico - INLA - Reproducibilidad"
-author: "Santiago Moncalero, Diego Fernández y Jorge Guitart"
+title: "**Disease Mapping: Modelo Logístico, INLA y Reproducibilidad**"
+subtitle: "_Autores: Santiago Moncalero, Diego Fernández y Jorge Guitart_"
 
 # Output options
 format: pdf
@@ -13,7 +12,6 @@ execute:
   
 # Style options
 fontsize: 10pt
-#geometry: "left = 2.5cm, righ t= 2.5cm, top = 3cm, bottom = 3cm"
 code-block-bg: white
 code-block-border-left: "82a3b0" # Must be a "hex" value
 ---
@@ -53,18 +51,18 @@ pacman::p_load(
 
 # Cargamos los datos
 load("./material/Aragon.Rdata")     # Cargar el archivo de datos
-aragon.sf <- st_read("./material/aragon.shp")  # Cargar el shapefile
+spatial_data <- st_read("./material/aragon.shp")  # Cargar el shapefile
 
 # Transformamos los datos
-aragon.sf <- aragon.sf[order(aragon.sf$CODMUNI), ]  # Ordenamos el dataframe
-aragon.sf <- cbind(aragon.sf, Aragon.df[, 2:3])    # Fusionamos los datos
+spatial_data <- spatial_data[order(spatial_data$CODMUNI), ]  # Ordenamos el dataframe
+spatial_data <- cbind(spatial_data, Aragon.df[, 2:3])    # Fusionamos los datos
 rm(Aragon.df)  # Eliminamos el dataframe original
 
 # Convertimos a SpatialPointsDataFrame (SPDF)
-aragon.spdf <- as(aragon.sf, "Spatial")
+aragon_spatial_df <- as(spatial_data, "Spatial")
 
 # Calculamos los vecinos (adaptado a WinBUGS)
-vecinos <- nb2WB(poly2nb(aragon.spdf))
+spatial_neighbors <- nb2WB(poly2nb(aragon_spatial_df))
 
 ```
 
@@ -73,7 +71,7 @@ vecinos <- nb2WB(poly2nb(aragon.spdf))
 #| echo: false
 
 # Definimos la función del modelo
-mod1 <- function() {
+spatial_model_winbugs <- function() {
   # Definimos el modelo para cada observación
   for (i in 1:nObs) {
     # Distribución de Poisson para las observaciones O
@@ -110,34 +108,34 @@ mod1 <- function() {
 }
 
 # Definimos la función para inicializar los valores del modelo
-inits.mod1 <- function() {
+initialize_winbugs <- function() {
   list(m = rnorm(1),          # Inicializamos m con una distribución normal
        sdhet = runif(1),      # Inicializamos sdhet con una distribución uniforme
        sdsp = runif(1))       # Inicializamos sdsp con una distribución uniforme
 }
 
 # Cargamos los datos para el modelo
-datos.mod1 <- list(
-  O = aragon.spdf$O,          # Observaciones de muertes
-  E = aragon.spdf$E,          # Observaciones de exposiciones
-  adj = vecinos$adj,          # Vecindad entre áreas
-  num = vecinos$num,          # Número de vecinos por área
-  w = vecinos$weights,        # Pesos de las conexiones vecinales
-  nObs = length(aragon.spdf)  # Número de observaciones (áreas)
+model_data_winbugs <- list(
+  O = aragon_spatial_df$O,          # Observaciones de muertes
+  E = aragon_spatial_df$E,          # Observaciones de exposiciones
+  adj = spatial_neighbors$adj,          # Vecindad entre áreas
+  num = spatial_neighbors$num,          # Número de vecinos por área
+  w = spatial_neighbors$weights,        # Pesos de las conexiones vecinales
+  nObs = length(aragon_spatial_df)  # Número de observaciones (áreas)
 )
 
 # Parámetros que queremos obtener
-params.mod1 <- c("R", "p.R")
+params_model_wingbugs <- c("R", "p.R")
 
 # Establecemos una semilla para reproducibilidad
 set.seed(123)
 
 # Ejecutamos el modelo con el paquete BUGS
-res.mod1 <- bugs(
-  data = datos.mod1,          # Datos del modelo
-  model = mod1,               # Función que define el modelo
-  param = params.mod1,        # Parámetros que queremos obtener
-  inits = inits.mod1          # Valores iniciales del modelo
+res_model_wingbugs <- bugs(
+  data = model_data_winbugs,          # Datos del modelo
+  model = spatial_model_winbugs,               # Función que define el modelo
+  param = params_model_wingbugs,        # Parámetros que queremos obtener
+  inits = initialize_winbugs          # Valores iniciales del modelo
 )
 
 ```
@@ -147,7 +145,7 @@ res.mod1 <- bugs(
 #| eval: false
 
 # Guardamos el resultado para ahorrar tiempo compilando
-save(res.mod1, file = "material/resmod1")
+save(res_model_wingbugs, file = "material/resmod1")
 ```
 
 ```{r res1.load}
@@ -161,8 +159,8 @@ load("./material/resmod1")
 #| echo: false
 
 # Añadimos al data.frame las columnas RME y p.RME
-aragon.sf$RME <- res.mod1$mean$R
-aragon.sf$p.RME <- res.mod1$mean$p.R
+spatial_data$RME <- res.mod1$mean$R
+spatial_data$p.RME <- res.mod1$mean$p.R
 ```
 
 ```{r INLA}
@@ -194,17 +192,17 @@ aragon_shape <- aragon_shape[order(aragon_shape$CODMUNI), ]
 
 #### ------- 2.1.1. ISQ ------- ####
 
-# Creación de una variable para la tasa de suicidio (ISQ)
-aragon_shape$isq_raw <- data$O / data$E  # Tasa de suicidio (observado/esperado)
+# Creación de una variable para la tasa de muertes (ISQ)
+aragon_shape$posterior_raw <- data$O / data$E  # Tasa de muertes (observado/esperado)
 
 # Definir los rangos para la categorización de ISQ
-isq_raw.cutoff <- c(0.6, 0.9, 1.3, 1.7)
-isq_raw_disc <- cut(aragon_shape$isq_raw, 
-                    breaks = isq_raw.cutoff, 
+posterior_raw.cutoff <- c(0.6, 0.9, 1.3, 1.7)
+posterior_raw_disc <- cut(aragon_shape$posterior_raw, 
+                    breaks = posterior_raw.cutoff, 
                     include.lowest = TRUE)
 
 # Asignar la clasificación de ISQ al shapefile
-aragon_shape$isq_raw_disc <- isq_raw_disc
+aragon_shape$posterior_raw_disc <- posterior_raw_disc
 
 #### --- 3. Definiendo la relación de vecinos espaciales --- ####
 
@@ -244,7 +242,7 @@ formula <- O ~ 1 + f(S,
 
 # Ajustar el modelo usando INLA
 set.seed(123)  # Establecer semilla para reproducibilidad
-mod.isq <- inla(formula,
+spatial_model_inla <- inla(formula,
                 family = "poisson",    # Modelo de Poisson
                 data = data,
                 E = E,                 # Offset (valor esperado)
@@ -254,22 +252,22 @@ mod.isq <- inla(formula,
 ### --- 4.3. Distribución posterior de los efectos aleatorios --- ####
 
 # Obtener y almacenar los resultados de los efectos aleatorios (espaciales)
-aragon_shape$SPmean <- round(mod.isq$summary.random$S[["mean"]], 4)
-aragon_shape$SPsd <- round(mod.isq$summary.random$S[["sd"]], 5)
+aragon_shape$SPmean <- round(spatial_model_inla$summary.random$S[["mean"]], 4)
+aragon_shape$SPsd <- round(spatial_model_inla$summary.random$S[["sd"]], 5)
 
 # Obtener y almacenar los resultados de los efectos aleatorios (no espaciales)
-aragon_shape$UPmean <- round(mod.isq$summary.random$U[["mean"]], 4)
-aragon_shape$UPsd <- round(mod.isq$summary.random$U[["sd"]], 5)
+aragon_shape$UPmean <- round(spatial_model_inla$summary.random$U[["mean"]], 4)
+aragon_shape$UPsd <- round(spatial_model_inla$summary.random$U[["sd"]], 5)
 
-### --- 4.4. Distribución posterior de la mortalidad por suicidio --- ####
+### --- 4.4. Distribución posterior de la mortalidad por muertes --- ####
 
-# Almacenar las distribuciones posteriores de la tasa de suicidio
-aragon_shape$isq_mean <- mod.isq$summary.fitted.values$mean    # Media
-aragon_shape$isq_sd <- mod.isq$summary.fitted.values$sd        # Desviación estándar
-aragon_shape$isq_median <- mod.isq$summary.fitted.values$`0.5quant`  # Mediana
-aragon_shape$isq_q025 <- mod.isq$summary.fitted.values$`0.025quant` # Cuantil 2.5%
-aragon_shape$isq_q975 <- mod.isq$summary.fitted.values$`0.975quant` # Cuantil 97.5%
-aragon_shape$isq_p1 <- 1 - mod.isq$summary.fitted.values$`1cdf`  # Probabilidad de ser mayor que 1
+# Almacenar las distribuciones posteriores de la tasa de muertes
+aragon_shape$posterior_mean <- spatial_model_inla$summary.fitted.values$mean    # Media
+aragon_shape$posterior_sd <- spatial_model_inla$summary.fitted.values$sd        # Desviación estándar
+aragon_shape$posterior_median <- spatial_model_inla$summary.fitted.values$`0.5quant`  # Mediana
+aragon_shape$posterior_q025 <- spatial_model_inla$summary.fitted.values$`0.025quant` # Cuantil 2.5%
+aragon_shape$posterior_q975 <- spatial_model_inla$summary.fitted.values$`0.975quant` # Cuantil 97.5%
+aragon_shape$posterior_p1 <- 1 - spatial_model_inla$summary.fitted.values$`1cdf`  # Probabilidad de ser mayor que 1
 ```
 
 # Resultados: Mapas de RME y RME \> 1
@@ -292,7 +290,7 @@ Esta convergencia en los resultados refuerza la validez de los modelos implement
 
 # Gráfico INLA: Media posterior
 inla_mean_plot <- ggplot(data = aragon_shape) +
-  geom_sf(aes(fill = isq_mean), color = "white") +
+  geom_sf(aes(fill = posterior_mean), color = "white") +
   scale_fill_viridis_c(option = "rocket",direction = -1) +
   ggtitle("Aragón, Media posterior (INLA)") +
   theme_classic() +
@@ -306,7 +304,7 @@ inla_mean_plot <- ggplot(data = aragon_shape) +
 
 # Gráfico INLA: Probabilidad (RME> 1)
 inla_p_plot <- ggplot(data = aragon_shape) +
-  geom_sf(aes(fill = isq_p1), color = "white") +
+  geom_sf(aes(fill = posterior_p1), color = "white") +
   scale_fill_viridis_c(option = "mako", direction=-1) +
   ggtitle("Aragón, P(RME > 1) (INLA)") +
   theme_classic() +
@@ -319,7 +317,7 @@ inla_p_plot <- ggplot(data = aragon_shape) +
   guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
 
 # Gráfico WingBUGS: Media (RME)
-rme_plot <- ggplot(data = aragon.sf) +
+rme_plot <- ggplot(data = spatial_data) +
   geom_sf(aes(fill = RME), color = "white") +
   scale_fill_viridis_c(option = "rocket",direction = -1) +
   ggtitle("Aragón, Media posterior (WinBUGS)") +
@@ -333,7 +331,7 @@ rme_plot <- ggplot(data = aragon.sf) +
   guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
 
 # Gráfico WingBUGS: Probabilidad (RME > 1)
-p_rme_plot <- ggplot(data = aragon.sf) +
+p_rme_plot <- ggplot(data = spatial_data) +
   geom_sf(aes(fill = p.RME), color = "white") +
   scale_fill_viridis_c(option = "mako",direction = -1) +
   ggtitle("Aragón, P(RME > 1) (WinBUGS)") +
@@ -371,21 +369,21 @@ Para evaluar cuantitativamente la similitud entre los resultados obtenidos media
 #| fig.cap: "Dispersiones entre modelos."
 
 ## Correlación
-cor_RME <- cor(aragon.sf$RME, aragon_shape$isq_mean, use = "complete.obs")
-cor_p <- cor(aragon.sf$p.RME, aragon_shape$isq_p1, use = "complete.obs")
+cor_RME <- cor(spatial_data$RME, aragon_shape$posterior_mean, use = "complete.obs")
+cor_p <- cor(spatial_data$p.RME, aragon_shape$posterior_p1, use = "complete.obs")
 
 cat("Correlación entre RME (WingBUGS e INLA):", cor_RME, "\n")
 cat("Correlación entre P(RME>1) (WingBUGS e INLA):", cor_p, "\n")
 
 
-scatter_RME <- ggplot(data = NULL, aes(x = aragon.sf$RME, y = aragon_shape$isq_mean)) +
+scatter_RME <- ggplot(data = NULL, aes(x = spatial_data$RME, y = aragon_shape$posterior_mean)) +
   geom_point(color = "darkgreen", alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
   ggtitle("Dispersión RME: WingBUGS vs. INLA") +
   xlab("WingBUGS (RME)") + ylab("INLA (RME)") +
   theme_classic()
 
-scatter_p <- ggplot(data = NULL, aes(x = aragon.sf$p.RME, y = aragon_shape$isq_p1)) +
+scatter_p <- ggplot(data = NULL, aes(x = spatial_data$p.RME, y = aragon_shape$posterior_p1)) +
   geom_point(color = "darkblue", alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
   ggtitle("Dispersión P(RME>1): WingBUGS vs. INLA") +
@@ -425,7 +423,7 @@ La similitud en las densidades esperadas refleja que ambos enfoques capturan de 
 #| fig.cap: "Gráficos de densidad de la media."
 
 
-Datos_medias <- data.frame("winbugs" = res.mod1$mean$R, "INLA" = mod.isq$summary.fitted.values$mean)
+Datos_medias <- data.frame("winbugs" = res_model_wingbugs$mean$R, "INLA" = spatial_model_inla$summary.fitted.values$mean)
 
 # Creación del gráfico de densidad
 graficomedias <- ggplot(Datos_medias) +
