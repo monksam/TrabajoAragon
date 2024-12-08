@@ -16,7 +16,7 @@ code-block-bg: white
 code-block-border-left: "82a3b0" # Must be a "hex" value
 ---
 
-# Introduccion
+# 1. Introduccion 
 
 La reproducibilidad y la replicabilidad son pilares fundamentales de la investigación científica. Estos conceptos no solo permiten verificar y validar los análisis realizados por terceros, sino que también facilitan su reutilización en nuevos contextos, fortaleciendo la confianza en los resultados obtenidos y en su validez empírica.
 
@@ -270,7 +270,7 @@ aragon_shape$posterior_q975 <- spatial_model_inla$summary.fitted.values$`0.975qu
 aragon_shape$posterior_p1 <- 1 - spatial_model_inla$summary.fitted.values$`1cdf`  # Probabilidad de ser mayor que 1
 ```
 
-# Resultados: Mapas de RME y RME \> 1
+# 2. Resultados: Mapas de RME y RME \> 1
 
 En este apartado, se presentan los mapas resultantes del análisis de tasas de mortalidad ajustadas, específicamente el Riesgo Relativo Estandarizado (RME) y las áreas donde RME \> 1, utilizando dos metodologías: WinBUGS e INLA.
 
@@ -355,7 +355,7 @@ final_plot
 
 \newpage
 
-# Correlación entre Resultados de WinBUGS e INLA
+# 3. Correlación entre Resultados de WinBUGS e INLA
 
 Para evaluar cuantitativamente la similitud entre los resultados obtenidos mediante las metodologías WinBUGS e INLA, se calculó la correlación entre las estimaciones de RME y las probabilidades de que RME \> 1.
 
@@ -403,13 +403,13 @@ Estos valores reflejan una excelente concordancia entre los dos enfoques, lo que
 
 \newpage
 
-# Comparación de las Densidades Esperadas
+# 4. Comparación de las Densidades Esperadas
 
-En este apartado, se comparan las distribuciones de las densidades esperadas estimadas por los modelos WinBUGS e INLA. Estas densidades reflejan la distribución ajustada del RME en toda la región de estudio, permitiendo evaluar las características globales de las tasas ajustadas obtenidas con cada metodología.
+En este apartado, se comparan las distribuciones de las densidades esperadas estimadas por los modelos WinBUGS e INLA. Estas densidades reflejan la distribución a posteriori del RME en toda la región de estudio, permitiendo evaluar las características globales de las tasas ajustadas obtenidas con cada metodología.
 
 Al graficar las densidades esperadas de ambos métodos, se observa una similitud destacable en las formas de las distribuciones. Ambas presentan una distribución unimodal con patrones que indican consistencia en las estimaciones. Las diferencias, aunque mínimas, pueden atribuirse a la forma en que cada metodología aborda el ajuste:
 
--   WinBUGS: Utiliza simulaciones Monte Carlo, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución.
+-   WinBUGS: Utiliza simulaciones MCMC, lo que permite explorar con mayor profundidad la incertidumbre en las estimaciones, pudiendo generar ligeras variaciones en las colas de la distribución.
 
 -   INLA: Recurre a aproximaciones determinísticas, lo que se traduce en estimaciones más rápidas, aunque puede suavizar ligeramente las colas de la distribución. A pesar de estas diferencias técnicas, las distribuciones esperadas de ambos modelos muestran un alto grado de solapamiento, lo que refuerza la confianza en los resultados obtenidos y la consistencia de las metodologías aplicadas.
 
@@ -453,9 +453,9 @@ graficomedias
 
 ```
 
-# Conclusiones
+# 5. Conclusiones
 
-En esta práctica, se ha llevado a cabo un análisis de mapeo de enfermedades empleando los modelos WinBUGS e INLA, con el propósito de estimar las tasas de mortalidad ajustadas y las probabilidades de que dichas tasas superen el valor 1 en la región de Aragón. Los resultados se han visualizado mediante mapas de la media posterior y probabilidades ajustadas, que han permitido identificar de manera clara las áreas de mayor y menor riesgo relativo.
+En esta práctica se ha llevado a cabo un análisis de mapeo de enfermedades empleando el modelo de Besag, York, y Mollié con dos metodologías diferentes: WinBUGS e INLA. El objetivo era estimar las tasas de mortalidad ajustadas y las probabilidades de que dichas tasas superen el valor 1 en la región de Aragón. Los resultados se han visualizado mediante mapas de la media posterior y probabilidades ajustadas, que han permitido identificar de manera clara las áreas de mayor y menor riesgo relativo.
 
 Por otro lado, la comparación entre los dos métodos ha demostrado una alta consistencia en las predicciones, como lo reflejan tanto los gráficos como los coeficientes de correlación elevados entre las estimaciones de RME y P(RME \> 1). Estas similitudes destacan la robustez de ambos enfoques para capturar los patrones espaciales subyacentes en los datos, a pesar de las diferencias metodológicas en su implementación.
 
