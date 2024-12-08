@@ -125,7 +125,7 @@ model_data_winbugs <- list(
 )
 
 # Parámetros que queremos obtener
-params_model_wingbugs <- c("R", "p.R")
+params_model_winbugs <- c("R", "p.R")
 
 # Establecemos una semilla para reproducibilidad
 set.seed(123)
@@ -134,7 +134,7 @@ set.seed(123)
 res_model_winbugs <- bugs(
   data = model_data_winbugs,          # Datos del modelo
   model = spatial_model_winbugs,               # Función que define el modelo
-  param = params_model_wingbugs,        # Parámetros que queremos obtener
+  param = params_model_winbugs,        # Parámetros que queremos obtener
   inits = initialize_winbugs          # Valores iniciales del modelo
 )
 
@@ -316,7 +316,7 @@ inla_p_plot <- ggplot(data = aragon_shape) +
   ) +
   guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
 
-# Gráfico WingBUGS: Media (RME)
+# Gráfico winbuGS: Media (RME)
 rme_plot <- ggplot(data = spatial_data) +
   geom_sf(aes(fill = RME), color = "white") +
   scale_fill_viridis_c(option = "rocket",direction = -1) +
@@ -330,7 +330,7 @@ rme_plot <- ggplot(data = spatial_data) +
   ) +
   guides(fill = guide_colourbar(barwidth = 10, barheight = 1.5))
 
-# Gráfico WingBUGS: Probabilidad (RME > 1)
+# Gráfico winbuGS: Probabilidad (RME > 1)
 p_rme_plot <- ggplot(data = spatial_data) +
   geom_sf(aes(fill = p.RME), color = "white") +
   scale_fill_viridis_c(option = "mako",direction = -1) +
@@ -355,7 +355,7 @@ final_plot
 
 \newpage
 
-# Correlación entre Resultados de WingBUGS e INLA
+# Correlación entre Resultados de WinBUGS e INLA
 
 Para evaluar cuantitativamente la similitud entre los resultados obtenidos mediante las metodologías WinBUGS e INLA, se calculó la correlación entre las estimaciones de RME y las probabilidades de que RME \> 1.
 
@@ -372,22 +372,22 @@ Para evaluar cuantitativamente la similitud entre los resultados obtenidos media
 cor_RME <- cor(spatial_data$RME, aragon_shape$posterior_mean, use = "complete.obs")
 cor_p <- cor(spatial_data$p.RME, aragon_shape$posterior_p1, use = "complete.obs")
 
-cat("Correlación entre RME (WingBUGS e INLA):", cor_RME, "\n")
-cat("Correlación entre P(RME>1) (WingBUGS e INLA):", cor_p, "\n")
+cat("Correlación entre RME (winbuGS e INLA):", cor_RME, "\n")
+cat("Correlación entre P(RME>1) (winbuGS e INLA):", cor_p, "\n")
 
 
 scatter_RME <- ggplot(data = NULL, aes(x = spatial_data$RME, y = aragon_shape$posterior_mean)) +
   geom_point(color = "darkgreen", alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-  ggtitle("Dispersión RME: WingBUGS vs. INLA") +
-  xlab("WingBUGS (RME)") + ylab("INLA (RME)") +
+  ggtitle("Dispersión RME: WinBUGS vs. INLA") +
+  xlab("WinBUGS (RME)") + ylab("INLA (RME)") +
   theme_classic()
 
 scatter_p <- ggplot(data = NULL, aes(x = spatial_data$p.RME, y = aragon_shape$posterior_p1)) +
   geom_point(color = "darkblue", alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-  ggtitle("Dispersión P(RME>1): WingBUGS vs. INLA") +
-  xlab("WingBUGS (P(RME>1))") + ylab("INLA (P(RME>1))") +
+  ggtitle("Dispersión P(RME>1): WinBUGS vs. INLA") +
+  xlab("WinBUGS (P(RME>1))") + ylab("INLA (P(RME>1))") +
   theme_classic()
 
 grid.arrange(scatter_RME, scatter_p, nrow = 2)
