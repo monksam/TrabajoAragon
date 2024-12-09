@@ -368,12 +368,9 @@ Para evaluar cuantitativamente la similitud entre los resultados obtenidos media
 #| fig.align: "center"
 #| fig.cap: "Dispersiones entre modelos."
 
-## Correlación
+## Correlación para el texto
 cor_RME <- cor(spatial_data$RME, aragon_shape$posterior_mean, use = "complete.obs")
 cor_p <- cor(spatial_data$p.RME, aragon_shape$posterior_p1, use = "complete.obs")
-
-cat("Correlación entre RME (winbuGS e INLA):", cor_RME, "\n")
-cat("Correlación entre P(RME>1) (winbuGS e INLA):", cor_p, "\n")
 
 
 scatter_RME <- ggplot(data = NULL, aes(x = spatial_data$RME, y = aragon_shape$posterior_mean)) +
@@ -396,8 +393,8 @@ grid.arrange(scatter_RME, scatter_p, nrow = 2)
 
 Los coeficientes de correlación obtenidos son notablemente altos:
 
--   Correlación entre RME: 0.9786
--   Correlación entre P(RME \> 1): 0.9831
+-   Correlación entre RME: `r cor_RME`
+-   Correlación entre P(RME \> 1): `r cor_p`
 
 Estos valores reflejan una excelente concordancia entre los dos enfoques, lo que respalda la consistencia de las estimaciones generadas independientemente del método utilizado. Tal nivel de similitud indica que ambos modelos logran capturar de manera adecuada los patrones subyacentes en los datos, tanto en las tasas ajustadas como en las probabilidades asociadas a riesgos relativos superiores al promedio.
 
